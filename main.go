@@ -46,6 +46,8 @@ const (
 
 func main() {
 
+	startTime := time.Now()
+
 	err := godotenv.Load()
 	if err != nil {
 		fmt.Println("Error loading .env file")
@@ -61,6 +63,9 @@ func main() {
 	}
 
 	getJobCards()
+
+	endTime := time.Now()
+	fmt.Printf("Time to run %v", endTime.Sub(startTime))
 
 }
 
@@ -111,11 +116,11 @@ func getJobCards() {
           }
         ],
         "geoQueryClause": {
-          "lat": 39.2408565,
-          "lng": -76.6799001,
-          "unit": "mi",
-          "distance": 30
-        },
+					"lat": 39.1023414,
+					"lng": -76.8000414,
+					"unit": "mi",
+					"distance": 50
+				},
         "dateFilters": [
           {
             "key": "firstDayOnSite",
@@ -167,7 +172,7 @@ func getJobCards() {
 		var links string
 		for i := 0; i < len(jobs.Data.JobCard.Cards); i++ {
 			card := jobs.Data.JobCard.Cards[0]
-			links += `<li><a href="https://hiring.amazon.com/app#/jobDetail?jobId=` + card.JobId + `">` + card.JobTitle + ` (` + card.City + `, ` + card.State + `)` + `</a></li>`
+			links += `<li><a href="https://hiring.amazon.com/app#/jobDetail?jobId=` + card.JobId + `&locale=en-US&fromVanity=1">` + card.JobTitle + ` (` + card.City + `, ` + card.State + `)` + `</a></li>`
 		}
 
 		err = sendEmail(links, jobs.Data)
@@ -177,7 +182,6 @@ func getJobCards() {
 	} else {
 		fmt.Println("No jobs found.")
 	}
-
 }
 
 func sendEmail(links string, cards SearchJobCard) error {
@@ -185,10 +189,9 @@ func sendEmail(links string, cards SearchJobCard) error {
 	from := mail.NewEmail("Isladfantasia Server", "isladfantasia.server@gmail.com")
 	subject := "NEW AMAZON FULFILLMENT JOBS - " + strconv.Itoa(len(cards.JobCard.Cards))
 	to := mail.NewEmail("Sebastian Villegas", "sebasvn2340@gmail.com")
-	to1 := &mail.Email{Name: "Sebastian Villegas", Address: "sebasvn2340@gmail.com"}
-	to2 := &mail.Email{Name: "Natalia Betancur", Address: "nbetancur1196@gmail.com"}
+	to1 := &mail.Email{Name: "Nancy", Address: "sebasvn2340@gmail.com"}
 	personalization := new(mail.Personalization)
-	personalization.To = append(personalization.To, to1, to2)
+	personalization.To = append(personalization.To, to1)
 	plainTextContent := "Jobs"
 	htmlContent := "<ul>" + links + "</ul>"
 	message := mail.NewSingleEmail(from, subject, to, plainTextContent, htmlContent)
