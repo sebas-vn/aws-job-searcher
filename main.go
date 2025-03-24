@@ -189,7 +189,7 @@ func sendEmail(links string, cards SearchJobCard) error {
 	from := mail.NewEmail("Isladfantasia Server", "isladfantasia.server@gmail.com")
 	subject := "NEW AMAZON FULFILLMENT JOBS - " + strconv.Itoa(len(cards.JobCard.Cards))
 	to := mail.NewEmail("Sebastian Villegas", "sebasvn2340@gmail.com")
-	to1 := &mail.Email{Name: "Nancy", Address: "sebasvn2340@gmail.com"}
+	to1 := &mail.Email{Name: "Sebastian Villegas", Address: "sebasvn2340@gmail.com"}
 	personalization := new(mail.Personalization)
 	personalization.To = append(personalization.To, to1)
 	plainTextContent := "Jobs"
