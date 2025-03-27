@@ -1,0 +1,11 @@
+services:
+  script:
+    build: .
+    volumes:
+      - type: bind
+        source: ./data
+        target: /app/data
+    env_file: ./.env
+      
+      
+

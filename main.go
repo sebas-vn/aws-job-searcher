@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,58 +10,70 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/sendgrid/sendgrid-go"
 	"github.com/sendgrid/sendgrid-go/helpers/mail"
+	"googlemaps.github.io/maps"
 )
 
-type sToken struct {
-	Token string `json:"token"`
-}
-
-type Response struct {
-	Data SearchJobCard `json:"data"`
-}
-
-type SearchJobCard struct {
-	JobCard struct {
-		NextToken any    `json:"nextToken"`
-		Cards     []Card `json:"jobCards"`
-		TypeName  string `json:"__typename"`
-	} `json:"searchJobCardsByLocation"`
-}
-
-type Card struct {
-	JobId    string `json:"jobId"`
-	JobTitle string `json:"jobTitle"`
-	City     string `json:"city"`
-	State    string `json:"state"`
-}
-
+// constants drawn from environment file
 const (
-	DATE  = "AWS_JOB_DATE"
-	TOKEN = "AWS_JOB_SESSION_TOKEN"
+	DATE         = "AWS_JOB_DATE"
+	TOKEN        = "AWS_JOB_SESSION_TOKEN"
+	GOOGLE_TOKEN = "GOOGLE_API_KEY"
+	FILE_PATH    = "FILE_PATH"
+	EMAIL        = "EMAIL"
+	ZIPCODE      = "ZIPCODE"
 )
 
 func main() {
 
+	today := time.Now().Format(time.DateOnly)
+	fmt.Printf("\nExecuting script: \"%s\"", today)
+
+	// load environments if there is .env file
 	err := godotenv.Load()
 	if err != nil {
-		fmt.Println("Error loading .env file")
+		fmt.Println("No .env file found")
 	}
 
-	today := time.Now().Format(time.DateOnly)
-	envDate := os.Getenv("AWS_JOB_DATE")
+	// setting start time
+	startTime := time.Now()
 
-	if envDate != today {
-		fmt.Printf(`Updating DATE variable: "%s" ~ "%s"`, envDate, today)
-		os.Setenv(DATE, today)
-		os.Setenv(TOKEN, getSessionToken().Token)
+	// getting unauthenitcated session token
+	os.Setenv(TOKEN, getSessionToken().Token)
+
+	// get saved data from gelocation request in file
+	if data, err := os.ReadFile(os.Getenv(FILE_PATH) + "/string.txt"); err == nil {
+		fmt.Println("\nReusing saved result:", string(data))
+		getJobCards(string(data))
+	} else {
+		fmt.Println("\nGetting geolocation data...")
+		getGeoQuery()
 	}
 
-	getJobCards()
+	endTime := time.Now()
+	fmt.Printf("Time to run %v", endTime.Sub(startTime))
+
+}
+
+// save GeoQuery API response to file in volume
+func saveToFile(jsonString string) {
+	fmt.Printf("Saving geolocation response to %s", os.Getenv(FILE_PATH)+"/string.txt")
+
+	// Ensure the directory exists
+	os.MkdirAll("/app/data", os.ModePerm)
+
+	// Write to file
+	if err := os.WriteFile(os.Getenv(FILE_PATH)+"/string.txt", []byte(jsonString), 0644); err != nil {
+		fmt.Println("Error writing file:", err)
+	}
+
+	// once saved get jobs
+	getJobCards(jsonString)
 
 }
 
@@ -89,9 +102,43 @@ func getSessionToken() *sToken {
 	return sesToken
 }
 
-func getJobCards() {
+func getGeoQuery() {
+	c, err := maps.NewClient(maps.WithAPIKey(os.Getenv(GOOGLE_TOKEN)))
+	if err != nil {
+		log.Fatalf("fatal error: %s", err)
+	}
 
-	fmt.Println("Getting jobs...")
+	r := &maps.GeocodingRequest{
+		Address: os.Getenv(ZIPCODE), // change this for environment variable
+	}
+
+	geocodingResponse, err := c.Geocode(context.Background(), r)
+	if err != nil {
+		log.Fatalf("fatal error: %s", err)
+	}
+
+	geoQueryClause := &GeoQueryClause{
+		Lat:      geocodingResponse[0].Geometry.Location.Lat,
+		Lng:      geocodingResponse[0].Geometry.Location.Lng,
+		Unit:     "mi",
+		Distance: 30,
+	}
+
+	jsonData, err := json.Marshal(geoQueryClause)
+	if err != nil {
+		fmt.Println("Error marshaling geoqueryResponse")
+		return
+	}
+
+	jsonString := string(jsonData)
+
+	// save string into file to check later
+	saveToFile(jsonString)
+}
+
+func getJobCards(jsonString string) {
+
+	fmt.Println("\nGetting jobs...")
 
 	payload := `{
     "operationName": "searchJobCardsByLocation",
@@ -110,12 +157,7 @@ func getJobCards() {
             ]
           }
         ],
-        "geoQueryClause": {
-          "lat": 39.2408565,
-          "lng": -76.6799001,
-          "unit": "mi",
-          "distance": 30
-        },
+        "geoQueryClause": ` + jsonString + `,
         "dateFilters": [
           {
             "key": "firstDayOnSite",
@@ -136,20 +178,17 @@ func getJobCards() {
 	newRequest, err := http.NewRequest("POST", "https://e5mquma77feepi2bdn4d6h3mpu.appsync-api.us-east-1.amazonaws.com/graphql", bytes.NewBuffer([]byte(payload)))
 	newRequest.Header.Set("Content-Type", "application/json")
 	newRequest.Header.Set("Authorization", authHeader)
-
 	if err != nil {
 		fmt.Printf("Error in generating new request -- %v", err)
 	}
 
 	client := &http.Client{Timeout: time.Second * 5}
 	response, err := client.Do(newRequest)
-
 	if err != nil {
 		fmt.Printf("There was an error executing the request -- %v", err)
 	}
 
 	responseData, err := io.ReadAll(response.Body)
-
 	if err != nil {
 		fmt.Printf("Data Read Error -- %v ", err)
 	}
@@ -167,7 +206,7 @@ func getJobCards() {
 		var links string
 		for i := 0; i < len(jobs.Data.JobCard.Cards); i++ {
 			card := jobs.Data.JobCard.Cards[0]
-			links += `<li><a href="https://hiring.amazon.com/app#/jobDetail?jobId=` + card.JobId + `">` + card.JobTitle + ` (` + card.City + `, ` + card.State + `)` + `</a></li>`
+			links += `<li><a href="https://hiring.amazon.com/app#/jobDetail?jobId=` + card.JobId + `&locale=en-US&fromVanity=1">` + card.JobTitle + ` (` + card.City + `, ` + card.State + `)` + `</a></li>`
 		}
 
 		err = sendEmail(links, jobs.Data)
@@ -177,21 +216,24 @@ func getJobCards() {
 	} else {
 		fmt.Println("No jobs found.")
 	}
-
 }
 
 func sendEmail(links string, cards SearchJobCard) error {
 
 	from := mail.NewEmail("Isladfantasia Server", "isladfantasia.server@gmail.com")
 	subject := "NEW AMAZON FULFILLMENT JOBS - " + strconv.Itoa(len(cards.JobCard.Cards))
-	to := mail.NewEmail("Sebastian Villegas", "sebasvn2340@gmail.com")
-	to1 := &mail.Email{Name: "Sebastian Villegas", Address: "sebasvn2340@gmail.com"}
-	to2 := &mail.Email{Name: "Natalia Betancur", Address: "nbetancur1196@gmail.com"}
 	personalization := new(mail.Personalization)
-	personalization.To = append(personalization.To, to1, to2)
+
+	// loop through emails set in environment
+	emails := strings.Split(os.Getenv(EMAIL), ",")
+	for _, value := range emails {
+		to := &mail.Email{Address: strings.TrimSpace(value)}
+		personalization.To = append(personalization.To, to)
+	}
+
 	plainTextContent := "Jobs"
 	htmlContent := "<ul>" + links + "</ul>"
-	message := mail.NewSingleEmail(from, subject, to, plainTextContent, htmlContent)
+	message := mail.NewSingleEmail(from, subject, personalization.To[0], plainTextContent, htmlContent)
 	message.AddPersonalizations(personalization)
 
 	client := sendgrid.NewSendClient(os.Getenv("SENDGRID_API_KEY"))
