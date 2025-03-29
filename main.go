@@ -206,7 +206,7 @@ func getJobCards(jsonString string) {
 		var links string
 		for i := 0; i < len(jobs.Data.JobCard.Cards); i++ {
 			card := jobs.Data.JobCard.Cards[0]
-			links += `<li><a href="https://hiring.amazon.com/app#/jobDetail?jobId=` + card.JobId + `&locale=en-US&fromVanity=1">` + card.JobTitle + ` (` + card.City + `, ` + card.State + `)` + `</a></li>`
+			links += `<li><a href="https://hiring.amazon.com/app#/jobDetail?jobId=` + card.JobId + `&locale=en-US">` + card.JobTitle + ` (` + card.City + `, ` + card.State + `)` + `</a></li>`
 		}
 
 		err = sendEmail(links, jobs.Data)
