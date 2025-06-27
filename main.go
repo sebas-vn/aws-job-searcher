@@ -206,7 +206,7 @@ func getJobCards(jsonString string) {
 		var links string
 		for i := 0; i < len(jobs.Data.JobCard.Cards); i++ {
 			card := jobs.Data.JobCard.Cards[0]
-			links += `<li><a href="https://hiring.amazon.com/app#/jobDetail?jobId=` + card.JobId + `&locale=en-US&fromVanity=1">` + card.JobTitle + ` (` + card.City + `, ` + card.State + `)` + `</a></li>`
+			links += `<li><a href="https://hiring.amazon.com/app#/jobDetail?jobId=` + card.JobId + `&locale=en-US">` + card.JobTitle + ` (` + card.City + `, ` + card.State + `)` + `</a></li>`
 		}
 
 		err = sendEmail(links, jobs.Data)
@@ -220,7 +220,7 @@ func getJobCards(jsonString string) {
 
 func sendEmail(links string, cards SearchJobCard) error {
 
-	from := mail.NewEmail("Isladfantasia Server", "isladfantasia.server@gmail.com")
+	from := mail.NewEmail(os.Getenv("EMAIL_SERVER_NAME"), os.Getenv("EMAIL_SERVER_ADDRESS"))
 	subject := "NEW AMAZON FULFILLMENT JOBS - " + strconv.Itoa(len(cards.JobCard.Cards))
 	personalization := new(mail.Personalization)
 
