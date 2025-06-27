@@ -220,7 +220,7 @@ func getJobCards(jsonString string) {
 
 func sendEmail(links string, cards SearchJobCard) error {
 
-	from := mail.NewEmail("Isladfantasia Server", "isladfantasia.server@gmail.com")
+	from := mail.NewEmail(os.Getenv("EMAIL_SERVER_NAME"), os.Getenv("EMAIL_SERVER_ADDRESS"))
 	subject := "NEW AMAZON FULFILLMENT JOBS - " + strconv.Itoa(len(cards.JobCard.Cards))
 	personalization := new(mail.Personalization)
 
